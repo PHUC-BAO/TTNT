@@ -11,6 +11,7 @@ Kho lưu trữ này tập trung vào bài tập và ghi chép trên lớp, trìn
 ```
 .
 ├── 24133005_TranPhucBao_BTT-TrenLop.ipynb
+└── Giao_dien.py
 └── README.md
 ```
 ## Công nghệ sử dụng
