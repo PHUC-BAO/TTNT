@@ -1,4 +1,4 @@
-###### 8-puzzle DFS (Duyệt theo chiều sâu - ĐÃ TỐI ƯU)
+###### 8-puzzle DFS (Duyệt theo chiều sâu)
 start = ((2, 8, 3), (1, 6, 4), (7, 0, 5))
 
 goal = ((1, 2, 3), (8, 0, 4), (7, 6, 5))
