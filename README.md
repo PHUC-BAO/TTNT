@@ -10,8 +10,8 @@ Kho lưu trữ này tập trung vào bài tập và ghi chép trên lớp, trìn
 ## Cấu trúc thư mục
 ```
 .
-├── 24133005_TranPhucBao_BTT-TrenLop.ipynb
-└── Giao_dien.py
+├── Search Algorithm
+└── 24133005_TranPhucBao_BTT-TrenLop.ipynb
 └── README.md
 ```
 ## Công nghệ sử dụng
@@ -20,4 +20,4 @@ Kho lưu trữ này tập trung vào bài tập và ghi chép trên lớp, trìn
 ## Đóng góp
 Nếu bạn muốn đề xuất cải tiến, vui lòng tạo issue hoặc pull request kèm mô tả rõ ràng.
 ## Tác giả
-Trần Phúc Bảo
+BaoTP
