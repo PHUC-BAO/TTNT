@@ -10,12 +10,7 @@ Repository này tổng hợp nội dung học tập của môn TTNT, tập trung
 ## Chủ đề chính
 - Tìm kiếm không gian trạng thái (BFS, DFS, UCS, A*)
 - Heuristic và tối ưu hóa
-- Biểu diễn tri thức và suy luận
-- Bài toán ràng buộc (CSP)
 - Ứng dụng AI cơ bản trong bài tập
-## Nội dung trong kho
-- Notebook bài tập/ghi chép: `24133005_TranPhucBao_BTT-TrenLop.ipynb`
-- README: thông tin môn học, cách sử dụng và cấu trúc thư mục
 ## Hướng dẫn sử dụng
 1. Cài đặt **Python 3.x**.
 2. Cài **Jupyter Notebook** hoặc **JupyterLab**.
