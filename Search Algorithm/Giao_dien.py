@@ -187,7 +187,7 @@ def run_ucs(start, goal, max_steps):
             new_r, new_c = r + dx, c + dy
             if 0 <= new_r < 3 and 0 <= new_c < 3:
                 next_state = swap(current, r, c, new_r, new_c)
-                action_cost = current[new_r][new_c]
+                action_cost = 1
                 new_g = g_cost + action_cost
 
                 if next_state in explored:
@@ -234,7 +234,7 @@ def run_astar(start, goal, max_steps):
             new_r, new_c = r + dx, c + dy
             if 0 <= new_r < 3 and 0 <= new_c < 3:
                 next_state = swap(current, r, c, new_r, new_c)
-                action_cost = current[new_r][new_c]
+                action_cost = 1
                 new_g = g_cost + action_cost
 
                 if next_state in explored:
@@ -296,6 +296,115 @@ def run_greedy(start, goal, max_steps):
     return None, states_history
 
 
+# 2.7 THUẬT TOÁN IDA* (Iterative Deepening A*)
+def idfs_astar_for_gui(current, goal, g_cost, f_limit, path, visited, states_history, last_info, max_steps):
+    if len(states_history) >= max_steps:
+        return "LIMIT_EXCEEDED", max_steps
+
+    h_cost = manhattan_distance(current, goal)
+    f_cost = g_cost + h_cost
+
+    states_history.append((current, last_info))
+
+    if current == goal:
+        return path, f_cost
+    if f_cost > f_limit:
+        return None, f_cost  # Trả về giá trị f lớn hơn để làm mốc limit tiếp theo
+
+    visited.add(current)
+    x, y = find_zero(current)
+    min_cutoff = float('inf')
+
+    for move, (dx, dy), move_name in ACTIONS:
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < 3 and 0 <= ny < 3:
+            neighbor = swap(current, x, y, nx, ny)
+            if neighbor not in visited:
+                swapped_val = current[nx][ny]
+                new_g = g_cost + 1
+                new_h = manhattan_distance(neighbor, goal)
+                new_f = new_g + new_h
+
+                desc = f"Giới hạn f_limit = {f_limit}. Xét [{move}] {move_name} (đổi số {swapped_val}): g={new_g}, h={new_h} -> f={new_f}"
+
+                result, next_f = idfs_astar_for_gui(neighbor, goal, new_g, f_limit, path + [move], visited, states_history, desc, max_steps)
+
+                if result == "LIMIT_EXCEEDED":
+                    return "LIMIT_EXCEEDED", max_steps
+                if result is not None:
+                    return result, next_f
+
+                if next_f < min_cutoff:
+                    min_cutoff = next_f
+
+    visited.remove(current) # Backtrack
+    return None, min_cutoff
+
+def run_idastar(start, goal, max_steps):
+    states_history = []
+    f_limit = manhattan_distance(start, goal)
+
+    while True:
+        visited = set()
+        init_info = f"--- Khởi động vòng lặp IDA* mới với f_limit = {f_limit} ---"
+        result, next_f = idfs_astar_for_gui(start, goal, 0, f_limit, [], visited, states_history, init_info, max_steps)
+
+        if result == "LIMIT_EXCEEDED":
+            return None, states_history
+        if result is not None:
+            return result, states_history
+        if next_f == float('inf') or next_f == f_limit:
+            # Không mở rộng thêm được nữa, bài toán vô nghiệm
+            return None, states_history
+
+        f_limit = next_f  # Nâng giới hạn f lên mức nhỏ nhất vượt ngưỡng cũ
+
+
+
+# 2.8 THUẬT TOÁN SIMPLE HILL CLIMBING (Leo đồi đơn giản)
+def run_hill_climbing(start, goal, max_steps):
+    current = start
+    path = []
+    states_history = []
+
+    curr_h = manhattan_distance(current, goal)
+    states_history.append((current, f"Bắt đầu tại START. Heuristic hiện tại h = {curr_h}"))
+
+    while current != goal:
+        if len(states_history) >= max_steps:
+            return None, states_history
+
+        x, y = find_zero(current)
+        neighbor_moved = False
+
+        # Duyệt qua các hướng theo thứ tự ưu tiên L -> R -> U -> D
+        for move, (dx, dy), move_name in ACTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < 3 and 0 <= ny < 3:
+                neighbor = swap(current, x, y, nx, ny)
+                neighbor_h = manhattan_distance(neighbor, goal)
+
+                # Simple Hill Climbing: Chọn ngay nút ĐẦU TIÊN có cải thiện (hoặc bằng)
+                if neighbor_h < curr_h:
+                    current = neighbor
+                    curr_h = neighbor_h
+                    path.append(move)
+                    swapped_val = current[x][y] # Giá trị cũ tại vị trí mới đổi
+
+                    desc = f"Hành động [{move}]: Leo đồi thành công sang {move_name} (đổi số {swapped_val}). h mới = {curr_h} tốt hơn h cũ."
+                    states_history.append((current, desc))
+                    neighbor_moved = True
+                    break # Đi tiếp luôn từ trạng thái mới, bỏ qua các hướng còn lại
+
+        # Nếu duyệt qua tất cả các hướng mà không tìm được trạng thái nào tốt hơn -> Kẹt cục bộ
+        if not neighbor_moved:
+            states_history.append((current, f"🛑 KẸT CỤC BỘ (Local Optimum)! Không có hướng nào quanh đây giảm h xuống dưới {curr_h}. Thuật toán dừng lại."))
+            return None, states_history
+
+    return path, states_history
+
+
+
 # ==============================================================================
 # 3. GIAO DIỆN ỨNG DỤNG
 # ==============================================================================
@@ -304,7 +413,7 @@ class PuzzleApp:
     def __init__(self, root):
         self.root = root
         self.root.title("8-Puzzle Solver Simulation Pro")
-        self.root.geometry("1150x820") # Nới rộng một chút để vừa 6 nút bấm
+        self.root.geometry("1150x850") # Nới rộng một chút để vừa 6 nút bấm
         self.root.configure(bg="#f0f2f5")
 
         self.cached_start = [["" for _ in range(3)] for _ in range(3)]
@@ -386,13 +495,17 @@ class PuzzleApp:
         btn_frame = tk.Frame(self.root, bg="#f0f2f5")
         btn_frame.pack(pady=5)
 
-        # Thanh 6 nút bấm thuật toán đầy đủ khoa học
-        ttk.Button(btn_frame, text="BFS Algorithm", command=lambda: self.validate_and_start("BFS")).grid(row=0, column=0, padx=5)
-        ttk.Button(btn_frame, text="DFS Algorithm", command=lambda: self.validate_and_start("DFS")).grid(row=0, column=1, padx=5)
-        ttk.Button(btn_frame, text="IDFS Algorithm", command=lambda: self.validate_and_start("IDFS")).grid(row=0, column=2, padx=5)
-        ttk.Button(btn_frame, text="UCS Algorithm", command=lambda: self.validate_and_start("UCS")).grid(row=0, column=3, padx=5)
-        ttk.Button(btn_frame, text="A* Algorithm", command=lambda: self.validate_and_start("A*")).grid(row=0, column=4, padx=5)
-        ttk.Button(btn_frame, text="Greedy Search", command=lambda: self.validate_and_start("Greedy")).grid(row=0, column=5, padx=5)
+        # Hàng 1: Các thuật toán tìm kiếm mù quáng (Uninformed)
+        ttk.Button(btn_frame, text="BFS Algorithm", command=lambda: self.validate_and_start("BFS")).grid(row=0, column=0, padx=5, pady=5)
+        ttk.Button(btn_frame, text="DFS Algorithm", command=lambda: self.validate_and_start("DFS")).grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(btn_frame, text="IDFS Algorithm", command=lambda: self.validate_and_start("IDFS")).grid(row=0, column=2, padx=5, pady=5)
+        ttk.Button(btn_frame, text="UCS Algorithm", command=lambda: self.validate_and_start("UCS")).grid(row=0, column=3, padx=5, pady=5)
+
+        # Hàng 2: Các thuật toán có tri thức (Informed / Heuristic)
+        ttk.Button(btn_frame, text="Greedy Search", command=lambda: self.validate_and_start("Greedy")).grid(row=1, column=0, padx=5, pady=5)
+        ttk.Button(btn_frame, text="A* Algorithm", command=lambda: self.validate_and_start("A*")).grid(row=1, column=1, padx=5, pady=5)
+        ttk.Button(btn_frame, text="IDA* Algorithm", command=lambda: self.validate_and_start("IDA*")).grid(row=1, column=2, padx=5, pady=5)
+        ttk.Button(btn_frame, text="Hill Climbing", command=lambda: self.validate_and_start("HillClimbing")).grid(row=1, column=3, padx=5, pady=5)
 
     def validate_and_start(self, algo_type):
         try:
@@ -456,6 +569,10 @@ class PuzzleApp:
             self.final_path, self.history = run_astar(self.start_state, self.goal_state, self.max_steps)
         elif algo_type == "Greedy":
             self.final_path, self.history = run_greedy(self.start_state, self.goal_state, self.max_steps)
+        elif algo_type == "IDA*":
+            self.final_path, self.history = run_idastar(self.start_state, self.goal_state, self.max_steps)
+        elif algo_type == "HillClimbing":
+            self.final_path, self.history = run_hill_climbing(self.start_state, self.goal_state, self.max_steps)
 
         self.current_index = 0
         self.game_screen(algo_type)
