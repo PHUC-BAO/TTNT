@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from collections import deque
 import heapq
+import random
 
 # ==============================================================================
 # 1. CẤU HÌNH HƯỚNG DI CHUYỂN DÙNG CHUNG (Thứ tự ưu tiên: L -> R -> U -> D)
@@ -403,6 +404,191 @@ def run_hill_climbing(start, goal, max_steps):
 
     return path, states_history
 
+# 2.9 THUẬT TOÁN STEEPEST-ASCENT HILL CLIMBING (Leo đồi dốc nhất)
+def run_steepest_hill_climbing(start, goal, max_steps):
+    current = start
+    path = []
+    states_history = []
+
+    curr_h = manhattan_distance(current, goal)
+    states_history.append((current, f"Bắt đầu tại START. Heuristic hiện tại h = {curr_h}"))
+
+    while current != goal:
+        if len(states_history) >= max_steps:
+            return None, states_history
+
+        x, y = find_zero(current)
+        best_neighbor = None
+        best_h = curr_h
+        best_move = None
+        best_move_name = None
+
+        # Duyệt TẤT CẢ các hướng để tìm trạng thái tối ưu nhất
+        for move, (dx, dy), move_name in ACTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < 3 and 0 <= ny < 3:
+                neighbor = swap(current, x, y, nx, ny)
+                neighbor_h = manhattan_distance(neighbor, goal)
+
+                if neighbor_h < best_h:
+                    best_h = neighbor_h
+                    best_neighbor = neighbor
+                    best_move = move
+                    best_move_name = move_name
+
+        # Nếu tìm được láng giềng tốt hơn hẳn trạng thái hiện tại
+        if best_neighbor is not None:
+            current = best_neighbor
+            curr_h = best_h
+            path.append(best_move)
+            swapped_val = current[x][y]
+            desc = f"Hành động [{best_move}]: Chọn hướng TỐT NHẤT {best_move_name} (đổi số {swapped_val}). h mới = {curr_h}."
+            states_history.append((current, desc))
+        else:
+            states_history.append((current, f"🛑 KẸT CỤC BỘ (Local Optimum)! Không hướng nào quanh đây tốt hơn h = {curr_h}."))
+            return None, states_history
+
+    return path, states_history
+
+
+# 2.10 THUẬT TOÁN STOCHASTIC HILL CLIMBING (Leo đồi ngẫu nhiên)
+def run_stochastic_hill_climbing(start, goal, max_steps):
+    current = start
+    path = []
+    states_history = []
+
+    curr_h = manhattan_distance(current, goal)
+    states_history.append((current, f"Bắt đầu tại START. Heuristic hiện tại h = {curr_h}"))
+
+    while current != goal:
+        if len(states_history) >= max_steps:
+            return None, states_history
+
+        x, y = find_zero(current)
+        better_neighbors = []
+
+        # Thu thập toàn bộ các hướng đi giúp cải thiện Heuristic
+        for move, (dx, dy), move_name in ACTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < 3 and 0 <= ny < 3:
+                neighbor = swap(current, x, y, nx, ny)
+                neighbor_h = manhattan_distance(neighbor, goal)
+                if neighbor_h < curr_h:
+                    better_neighbors.append((neighbor, neighbor_h, move, move_name))
+
+        if better_neighbors:
+            # Chọn NGẪU NHIÊN một trong số các hướng tốt
+            current, curr_h, move, move_name = random.choice(better_neighbors)
+            path.append(move)
+            swapped_val = current[x][y]
+            desc = f"Hành động [{move}]: Lựa chọn NGẪU NHIÊN hướng đi tốt {move_name} (đổi số {swapped_val}). h mới = {curr_h}."
+            states_history.append((current, desc))
+        else:
+            states_history.append((current, f"🛑 KẸT CỤC BỘ! Không có hướng đi ngẫu nhiên nào cải thiện được h = {curr_h}."))
+            return None, states_history
+
+    return path, states_history
+
+
+# 2.11 THUẬT TOÁN HILL CLIMBING WITH RANDOM WALKS (Leo đồi vượt kẹt ngẫu nhiên)
+def run_hill_climbing_random_walk(start, goal, max_steps, walk_steps=6):
+    current = start
+    path = []
+    states_history = []
+
+    curr_h = manhattan_distance(current, goal)
+    states_history.append((current, f"Bắt đầu tại START. Heuristic hiện tại h = {curr_h}"))
+
+    while current != goal:
+        if len(states_history) >= max_steps:
+            return None, states_history
+
+        x, y = find_zero(current)
+        neighbor_moved = False
+
+        # 1. Cố gắng leo đồi bình thường
+        for move, (dx, dy), move_name in ACTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < 3 and 0 <= ny < 3:
+                neighbor = swap(current, x, y, nx, ny)
+                neighbor_h = manhattan_distance(neighbor, goal)
+
+                if neighbor_h < curr_h:
+                    current = neighbor
+                    curr_h = neighbor_h
+                    path.append(move)
+                    swapped_val = current[x][y]
+                    states_history.append((current, f"Hành động [{move}]: Leo đồi sang {move_name} (đổi số {swapped_val}). h mới = {curr_h}."))
+                    neighbor_moved = True
+                    break
+
+        # 2. Nếu kẹt, thực hiện chuỗi Random Walk để dịch chuyển sang thung lũng khác
+        if not neighbor_moved:
+            states_history.append((current, f"⚠️ KẸT CỤC BỘ tại h = {curr_h}! Thực hiện Random Walk {walk_steps} bước để phá kẹt..."))
+
+            for _ in range(walk_steps):
+                if current == goal:
+                    break
+                x, y = find_zero(current)
+                valid_moves = []
+                for move, (dx, dy), move_name in ACTIONS:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < 3 and 0 <= ny < 3:
+                        valid_moves.append((move, dx, dy, move_name))
+
+                if valid_moves:
+                    move, dx, dy, move_name = random.choice(valid_moves)
+                    current = swap(current, x, y, x + dx, y + dy)
+                    curr_h = manhattan_distance(current, goal)
+                    path.append(move)
+                    swapped_val = current[x][y]
+                    states_history.append((current, f"🎲 [Random Walk]: Đi ngẫu nhiên hướng [{move}] {move_name} (đổi số {swapped_val}) -> h = {curr_h}"))
+
+    return path, states_history
+
+
+# 2.12 THUẬT TOÁN LOCAL BEAM SEARCH (Tìm kiếm chùm cục bộ với k = 3)
+def run_local_beam_search(start, goal, max_steps, k=3):
+    # Mỗi phần tử trong beam lưu dạng: (h_value, trạng_thái, lộ_trình_đã_đi)
+    curr_h = manhattan_distance(start, goal)
+    beam = [(curr_h, start, [])]
+    states_history = []
+    states_history.append((start, f"Khởi tạo chùm (Beam Search) với độ rộng k = {k}. Gốc có h = {curr_h}"))
+
+    step_count = 0
+    while step_count < max_steps:
+        # Kiểm tra xem có node nào trong chùm chạm đích chưa
+        for _, state, path in beam:
+            if state == goal:
+                states_history.append((state, "🎉 Thành công! Một nhánh trong chùm tìm kiếm đã chạm tới ĐÍCH."))
+                return path, states_history
+
+        successors = []
+        # Tạo tất cả các trạng thái con của TOÀN BỘ các trạng thái trong chùm hiện tại
+        for _, state, path in beam:
+            x, y = find_zero(state)
+            for move, (dx, dy), move_name in ACTIONS:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < 3 and 0 <= ny < 3:
+                    neighbor = swap(state, x, y, nx, ny)
+                    neighbor_h = manhattan_distance(neighbor, goal)
+                    successors.append((neighbor_h, neighbor, path + [move]))
+
+        if not successors:
+            states_history.append((beam[0][1], "🛑 Chùm tìm kiếm bị cụt đường. Thuật toán dừng lại."))
+            return None, states_history
+
+        # Sắp xếp tất cả các con của chùm theo Heuristic tăng dần và chọn lọc lấy k cái tốt nhất
+        successors.sort(key=lambda x: x[0])
+        beam = successors[:k]
+        step_count += 1
+
+        # Lấy trạng thái đứng đầu chùm (tốt nhất) để hiển thị lịch sử lên GUI trực quan
+        best_h, best_state, _ = beam[0]
+        desc = f"Vòng duyệt {step_count}: Sàng lọc chùm mới. Trạng thái tốt nhất hiện tại có h = {best_h} (Độ rộng chùm giữ lại: {len(beam)} node)."
+        states_history.append((best_state, desc))
+
+    return None, states_history
 
 
 # ==============================================================================
@@ -507,6 +693,12 @@ class PuzzleApp:
         ttk.Button(btn_frame, text="IDA* Algorithm", command=lambda: self.validate_and_start("IDA*")).grid(row=1, column=2, padx=5, pady=5)
         ttk.Button(btn_frame, text="Hill Climbing", command=lambda: self.validate_and_start("HillClimbing")).grid(row=1, column=3, padx=5, pady=5)
 
+        # THÊM VÀO ĐÂY - Hàng 3: Các thuật toán Tìm kiếm cục bộ nâng cao (Local Search)
+        ttk.Button(btn_frame, text="Steepest Hill Climbing", command=lambda: self.validate_and_start("SteepestHC")).grid(row=2, column=0, padx=5, pady=5)
+        ttk.Button(btn_frame, text="Stochastic Hill Climbing", command=lambda: self.validate_and_start("StochasticHC")).grid(row=2, column=1, padx=5, pady=5)
+        ttk.Button(btn_frame, text="Random Walk HC", command=lambda: self.validate_and_start("RandomWalkHC")).grid(row=2, column=2, padx=5, pady=5)
+        ttk.Button(btn_frame, text="Local Beam Search", command=lambda: self.validate_and_start("LocalBeam")).grid(row=2, column=3, padx=5, pady=5)
+
     def validate_and_start(self, algo_type):
         try:
             limit_val = int(self.limit_entry.get().strip())
@@ -573,6 +765,14 @@ class PuzzleApp:
             self.final_path, self.history = run_idastar(self.start_state, self.goal_state, self.max_steps)
         elif algo_type == "HillClimbing":
             self.final_path, self.history = run_hill_climbing(self.start_state, self.goal_state, self.max_steps)
+        elif algo_type == "SteepestHC":
+            self.final_path, self.history = run_steepest_hill_climbing(self.start_state, self.goal_state, self.max_steps)
+        elif algo_type == "StochasticHC":
+            self.final_path, self.history = run_stochastic_hill_climbing(self.start_state, self.goal_state, self.max_steps)
+        elif algo_type == "RandomWalkHC":
+            self.final_path, self.history = run_hill_climbing_random_walk(self.start_state, self.goal_state, self.max_steps)
+        elif algo_type == "LocalBeam":
+            self.final_path, self.history = run_local_beam_search(self.start_state, self.goal_state, self.max_steps)
 
         self.current_index = 0
         self.game_screen(algo_type)
