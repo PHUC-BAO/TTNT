@@ -20,11 +20,11 @@ Repository này tổng hợp nội dung học tập của môn TTNT, tập trung
 ```
 .
 ├── Search Algorithm
-   ├── Giao_dien.py   # Chương trình chính
-   ├── BFS.py
-   ├── DFS.py
-   ├── UCS.py
-   └── ...
+|   ├── Giao_dien.py   # Chương trình chính
+|   ├── BFS.py
+|   ├── DFS.py
+|   ├── UCS.py
+|   └── ...
 ├── Project
 └── README.md
 ```
