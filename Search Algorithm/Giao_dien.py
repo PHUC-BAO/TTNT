@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 from collections import deque
 import heapq
 import random
+import math  # Thêm thư viện toán học để tính xác suất cho Simulated Annealing
 
 # ==============================================================================
 # 1. CẤU HÌNH HƯỚNG DI CHUYỂN DÙNG CHUNG (Thứ tự ưu tiên: L -> R -> U -> D)
@@ -399,7 +400,7 @@ def run_hill_climbing(start, goal, max_steps):
 
         # Nếu duyệt qua tất cả các hướng mà không tìm được trạng thái nào tốt hơn -> Kẹt cục bộ
         if not neighbor_moved:
-            states_history.append((current, f"🛑 KẸT CỤC BỘ (Local Optimum)! Không có hướng nào quanh đây giảm h xuống dưới {curr_h}. Thuật toán dừng lại."))
+            states_history.append((current, f"KẸT CỤC BỘ (Local Optimum)! Không có hướng nào quanh đây giảm h xuống dưới {curr_h}. Thuật toán dừng lại."))
             return None, states_history
 
     return path, states_history
@@ -445,7 +446,7 @@ def run_steepest_hill_climbing(start, goal, max_steps):
             desc = f"Hành động [{best_move}]: Chọn hướng TỐT NHẤT {best_move_name} (đổi số {swapped_val}). h mới = {curr_h}."
             states_history.append((current, desc))
         else:
-            states_history.append((current, f"🛑 KẸT CỤC BỘ (Local Optimum)! Không hướng nào quanh đây tốt hơn h = {curr_h}."))
+            states_history.append((current, f"KẸT CỤC BỘ (Local Optimum)! Không hướng nào quanh đây tốt hơn h = {curr_h}."))
             return None, states_history
 
     return path, states_history
@@ -484,7 +485,7 @@ def run_stochastic_hill_climbing(start, goal, max_steps):
             desc = f"Hành động [{move}]: Lựa chọn NGẪU NHIÊN hướng đi tốt {move_name} (đổi số {swapped_val}). h mới = {curr_h}."
             states_history.append((current, desc))
         else:
-            states_history.append((current, f"🛑 KẸT CỤC BỘ! Không có hướng đi ngẫu nhiên nào cải thiện được h = {curr_h}."))
+            states_history.append((current, f"KẸT CỤC BỘ! Không có hướng đi ngẫu nhiên nào cải thiện được h = {curr_h}."))
             return None, states_history
 
     return path, states_history
@@ -560,7 +561,7 @@ def run_local_beam_search(start, goal, max_steps, k=3):
         # Kiểm tra xem có node nào trong chùm chạm đích chưa
         for _, state, path in beam:
             if state == goal:
-                states_history.append((state, "🎉 Thành công! Một nhánh trong chùm tìm kiếm đã chạm tới ĐÍCH."))
+                states_history.append((state, "Thành công! Một nhánh trong chùm tìm kiếm đã chạm tới ĐÍCH."))
                 return path, states_history
 
         successors = []
@@ -575,7 +576,7 @@ def run_local_beam_search(start, goal, max_steps, k=3):
                     successors.append((neighbor_h, neighbor, path + [move]))
 
         if not successors:
-            states_history.append((beam[0][1], "🛑 Chùm tìm kiếm bị cụt đường. Thuật toán dừng lại."))
+            states_history.append((beam[0][1], "Chùm tìm kiếm bị cụt đường. Thuật toán dừng lại."))
             return None, states_history
 
         # Sắp xếp tất cả các con của chùm theo Heuristic tăng dần và chọn lọc lấy k cái tốt nhất
@@ -591,6 +592,147 @@ def run_local_beam_search(start, goal, max_steps, k=3):
     return None, states_history
 
 
+# 2.13 THUẬT TOÁN LUYỆN KIM (Simulated Annealing - SA)
+def run_simulated_annealing(start, goal, max_steps):
+    current = start
+    path = []
+    states_history = []
+
+    curr_h = manhattan_distance(current, goal)
+    states_history.append((current, f"Bắt đầu Luyện Kim tại START. h = {curr_h}, Nhiệt độ ban đầu T = 100.0"))
+
+    # Thiết lập các tham số tôi luyện kim
+    T = 100.0          # Nhiệt độ ban đầu
+    alpha = 0.95        # Hệ số hạ nhiệt (cooling rate)
+
+    while current != goal:
+        if len(states_history) >= max_steps:
+            return None, states_history
+
+        if T < 0.001:
+            states_history.append((current, f"Lò nguội hoàn toàn (T đạt giới hạn dưới). Thuật toán dừng lại tại h = {curr_h}."))
+            return None, states_history
+
+        x, y = find_zero(current)
+        valid_neighbors = []
+
+        # Lấy tất cả các láng giềng hợp lệ quanh vị trí ô trống
+        for move, (dx, dy), move_name in ACTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < 3 and 0 <= ny < 3:
+                neighbor = swap(current, x, y, nx, ny)
+                neighbor_h = manhattan_distance(neighbor, goal)
+                valid_neighbors.append((neighbor, neighbor_h, move, move_name))
+
+        if not valid_neighbors:
+            return None, states_history
+
+        # Chọn ngẫu nhiên MỘT láng giềng bất kỳ (bản chất của SA là chọn ngẫu nhiên trạng thái kế tiếp)
+        next_state, next_h, move, move_name = random.choice(valid_neighbors)
+
+        # Tính toán độ chênh lệch năng lượng (Delta E). Vì ta muốn giảm h nên Delta E = h_cũ - h_mới
+        # Nếu next_h nhỏ hơn (tốt hơn), delta_e sẽ > 0
+        delta_e = curr_h - next_h
+
+        if delta_e > 0:
+            # Trạng thái mới tốt hơn -> Chấp nhận ngay lập tức
+            current = next_state
+            curr_h = next_h
+            path.append(move)
+            states_history.append((current, f"✅ Hướng tốt: Di chuyển [{move}] {move_name}. h mới = {curr_h} (Giảm được {-delta_e} đơn vị). T = {T:.3f}"))
+        else:
+            # Trạng thái mới tệ hơn hoặc bằng -> Chấp nhận với xác suất Boltzmann P = e^(delta_e / T)
+            # Vì delta_e <= 0 nên toán tử mũ cơ số e sẽ cho ra kết quả trong khoảng (0, 1]
+            prob = math.exp(delta_e / T)
+            rand_val = random.random()
+
+            if rand_val < prob:
+                # Chấp nhận bước nhảy tệ này để phá kẹt
+                current = next_state
+                curr_h = next_h
+                path.append(move)
+                states_history.append((current, f"🎲 Chấp nhận hướng tệ hơn nhờ nhiệt độ! Hướng [{move}] {move_name}. h tăng lên {curr_h} (Xác suất P={prob:.3f} > {rand_val:.3f}). T = {T:.3f}"))
+            else:
+                # Từ chối, giữ nguyên trạng thái cũ ở bước này
+                states_history.append((current, f"❌ Từ chối hướng tệ [{move}] {move_name} (h={next_h}). Xác suất P={prob:.3f} <= {rand_val:.3f}. Giữ nguyên. T = {T:.3f}"))
+
+        # Hạ nhiệt độ theo chu kỳ
+        T *= alpha
+
+    return path, states_history
+
+
+# 2.14 THUẬT TOÁN TÌM KIẾM HAI HƯỚNG (Bidirectional BFS)
+def run_bidirectional_search(start, goal, max_steps):
+    # Hai hàng đợi cho hai đầu
+    queue_f = deque([(start, [])])  # Xuôi từ Start (Forward)
+    queue_b = deque([(goal, [])])   # Ngược từ Goal (Backward)
+
+    # Hai tập đã duyệt lưu vết cùng lộ trình tương ứng dẫn đến trạng thái đó
+    # key: state -> value: list of moves
+    visited_f = {start: []}
+    visited_b = {goal: []}
+
+    states_history = []
+    states_history.append((start, "🧭 Khởi tạo Tìm kiếm Hai hướng: Nhánh Xuôi (Start) và Nhánh Ngược (Goal) bắt đầu quét song song."))
+
+    # Bản đồ đảo ngược ký tự hướng di chuyển để tính toán lộ trình nhánh Ngược
+    reverse_move = {'L': 'R', 'R': 'L', 'U': 'D', 'D': 'U'}
+
+    step_count = 0
+    while queue_f and queue_b:
+        if len(states_history) >= max_steps:
+            return None, states_history
+
+        # 1. Phát triển 1 bước bên phía Nhánh Xuôi (Forward)
+        curr_f, path_f = queue_f.popleft()
+        states_history.append((curr_f, f"➡️ [Nhánh Xuôi] Đang xét một Node. Kích thước tập duyệt xuôi: {len(visited_f)}"))
+
+        # Kiểm tra giao điểm ngay lập tức
+        if curr_f in visited_b:
+            # Hai nhánh đã chạm nhau! Kết hợp lộ trình
+            full_path = path_f + visited_b[curr_f]
+            states_history.append((curr_f, "🎉 HAI MA TRẬN ĐÃ GẶP NHAU TẠI ĐÂY! Hoàn thành kết nối lộ trình giữa Start và Goal."))
+            return full_path, states_history
+
+        x, y = find_zero(curr_f)
+        for move, (dx, dy), move_name in ACTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < 3 and 0 <= ny < 3:
+                next_f = swap(curr_f, x, y, nx, ny)
+                if next_f not in visited_f:
+                    visited_f[next_f] = path_f + [move]
+                    queue_f.append((next_f, path_f + [move]))
+
+        # 2. Phát triển 1 bước bên phía Nhánh Ngược (Backward)
+        curr_b, path_b = queue_b.popleft()
+        states_history.append((curr_b, f"⬅️ [Nhánh Ngược] Đang xét một Node. Kích thước tập duyệt ngược: {len(visited_b)}"))
+
+        # Kiểm tra giao điểm
+        if curr_b in visited_f:
+            # Hai nhánh gặp nhau
+            full_path = visited_f[curr_b] + path_b
+            states_history.append((curr_b, "🎉 HAI MA TRẬN ĐÃ GẶP NHAU TẠI ĐÂY! Hoàn thành kết nối lộ trình giữa Start và Goal."))
+            return full_path, states_history
+
+        x, y = find_zero(curr_b)
+        for move, (dx, dy), move_name in ACTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < 3 and 0 <= ny < 3:
+                next_b = swap(curr_b, x, y, nx, ny)
+                if next_b not in visited_b:
+                    # Chú ý: Hành động đẩy ô trống nhánh ngược từ Goal lên cần đảo ngược hướng di chuyển thực tế
+                    actual_move = reverse_move[move]
+                    # Đường đi nhánh ngược được chèn vào ĐẦU danh sách để đảm bảo đúng thứ tự khi nối chuỗi
+                    new_path_b = [actual_move] + path_b
+                    visited_b[next_b] = new_path_b
+                    queue_b.append((next_b, new_path_b))
+
+        step_count += 1
+
+    return None, states_history
+
+
 # ==============================================================================
 # 3. GIAO DIỆN ỨNG DỤNG
 # ==============================================================================
@@ -599,7 +741,7 @@ class PuzzleApp:
     def __init__(self, root):
         self.root = root
         self.root.title("8-Puzzle Solver Simulation Pro")
-        self.root.geometry("1150x850") # Nới rộng một chút để vừa 6 nút bấm
+        self.root.geometry("1150x880") # Tăng chiều cao một chút để chứa giao diện 14 nút bấm thông thoáng
         self.root.configure(bg="#f0f2f5")
 
         self.cached_start = [["" for _ in range(3)] for _ in range(3)]
@@ -693,11 +835,15 @@ class PuzzleApp:
         ttk.Button(btn_frame, text="IDA* Algorithm", command=lambda: self.validate_and_start("IDA*")).grid(row=1, column=2, padx=5, pady=5)
         ttk.Button(btn_frame, text="Hill Climbing", command=lambda: self.validate_and_start("HillClimbing")).grid(row=1, column=3, padx=5, pady=5)
 
-        # THÊM VÀO ĐÂY - Hàng 3: Các thuật toán Tìm kiếm cục bộ nâng cao (Local Search)
+        # Hàng 3: Các thuật toán Tìm kiếm cục bộ nâng cao (Local Search)
         ttk.Button(btn_frame, text="Steepest Hill Climbing", command=lambda: self.validate_and_start("SteepestHC")).grid(row=2, column=0, padx=5, pady=5)
         ttk.Button(btn_frame, text="Stochastic Hill Climbing", command=lambda: self.validate_and_start("StochasticHC")).grid(row=2, column=1, padx=5, pady=5)
         ttk.Button(btn_frame, text="Random Walk HC", command=lambda: self.validate_and_start("RandomWalkHC")).grid(row=2, column=2, padx=5, pady=5)
         ttk.Button(btn_frame, text="Local Beam Search", command=lambda: self.validate_and_start("LocalBeam")).grid(row=2, column=3, padx=5, pady=5)
+
+        # CẬP NHẬT: Hàng 4: Các thuật toán mới yêu cầu bổ sung
+        ttk.Button(btn_frame, text="🔥 Simulated Annealing", command=lambda: self.validate_and_start("SA")).grid(row=3, column=0, columnspan=2, padx=5, pady=5, sticky="we")
+        ttk.Button(btn_frame, text="🧭 Bidirectional Search", command=lambda: self.validate_and_start("Bidirectional")).grid(row=3, column=2, columnspan=2, padx=5, pady=5, sticky="we")
 
     def validate_and_start(self, algo_type):
         try:
@@ -773,6 +919,10 @@ class PuzzleApp:
             self.final_path, self.history = run_hill_climbing_random_walk(self.start_state, self.goal_state, self.max_steps)
         elif algo_type == "LocalBeam":
             self.final_path, self.history = run_local_beam_search(self.start_state, self.goal_state, self.max_steps)
+        elif algo_type == "SA":
+            self.final_path, self.history = run_simulated_annealing(self.start_state, self.goal_state, self.max_steps)
+        elif algo_type == "Bidirectional":
+            self.final_path, self.history = run_bidirectional_search(self.start_state, self.goal_state, self.max_steps)
 
         self.current_index = 0
         self.game_screen(algo_type)
@@ -824,7 +974,7 @@ class PuzzleApp:
 
         if self.final_path is not None:
             formatted_path = " -> ".join(self.final_path)
-            self.path_text.insert("1.0", f"Tìm thấy đích thành công!\nTổng số bước đi: {len(self.final_path)}\nTổng số Node đã duyệt: {len(self.history)}\n\nLộ trình di chuyển:\n{formatted_path}")
+            self.path_text.insert("1.0", f"Tìm thấy đích thành công!\nTổng số bước đi: {len(self.final_path)}\nTổng số Node đã duyệt hiển thị: {len(self.history)}\n\nLộ trình di chuyển:\n{formatted_path}")
         else:
             if len(self.history) >= self.max_steps:
                 self.path_text.insert("1.0", f"❌ THẤT BẠI: VƯỢT QUÁ GIỚI HẠN DUYỆT!\n\nThuật toán đã bị ngắt cưỡng bức do chạm mốc giới hạn tối đa ({self.max_steps} nodes) mà bạn đã thiết lập nhưng chưa tìm thấy đích.")
@@ -885,17 +1035,20 @@ class PuzzleApp:
 
         self.step_lbl.config(text=f"Trạng thái đang xét (Node thứ: {self.current_index + 1}/{len(self.history)})")
 
-        if current_state == self.goal_state:
-            self.explain_text_lbl.config(text="🎉 THÀNH CÔNG! Thuật toán đã chạm được đến GOAL_STATE!", bg="#d4edda", fg="#155724")
+        # CẬP NHẬT: Xử lý màu sắc hiển thị linh hoạt cho cả điểm kết nối của Bidirectional Search
+        if current_state == self.goal_state or "🎉" in explanation:
+            self.explain_text_lbl.config(text=explanation, bg="#d4edda", fg="#155724")
+            is_success_state = True
         else:
             self.explain_text_lbl.config(text=explanation, bg="#fff3e0", fg="#e65100")
+            is_success_state = False
 
         for i in range(3):
             for j in range(3):
                 val = current_state[i][j]
                 text = "" if val == 0 else str(val)
-                bg_color = "#e8eaed" if val == 0 else ("#d4edda" if current_state == self.goal_state else "#e8f0fe")
-                fg_color = "#155724" if current_state == self.goal_state else "#1a73e8"
+                bg_color = "#e8eaed" if val == 0 else ("#d4edda" if is_success_state else "#e8f0fe")
+                fg_color = "#155724" if is_success_state else "#1a73e8"
 
                 lbl = tk.Label(self.live_grid_frame, text=text, font=("Helvetica", 18, "bold"), width=4, height=2, bg=bg_color, fg=fg_color, bd=1, relief="solid")
                 lbl.grid(row=i, column=j, padx=2, pady=2)
