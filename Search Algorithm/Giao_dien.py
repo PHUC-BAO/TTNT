@@ -3,7 +3,7 @@ from tkinter import ttk, messagebox
 from collections import deque
 import heapq
 import random
-import math  # Thêm thư viện toán học để tính xác suất cho Simulated Annealing
+import math
 
 # ==============================================================================
 # 1. CẤU HÌNH HƯỚNG DI CHUYỂN DÙNG CHUNG (Thứ tự ưu tiên: L -> R -> U -> D)
