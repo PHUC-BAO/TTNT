@@ -8,7 +8,7 @@ Repository này tổng hợp nội dung học tập của môn TTNT, tập trung
 - Làm quen với các thuật toán tìm kiếm và suy luận.
 - Thực hành mô hình hóa và đánh giá kết quả trên ví dụ nhỏ.
 ## Chủ đề chính
-- Tìm kiếm không gian trạng thái (BFS, DFS, IDFS, UCS, A*, Greedy Best-First Search, IDA*, Simple Hill Climbing)
+- Tìm kiếm không gian trạng thái (BFS, DFS, IDFS, UCS, A*, Greedy Best-First Search, IDA*, Simple Hill Climbing, ...)
 - Heuristic và tối ưu hóa
 - Ứng dụng AI cơ bản trong bài tập
 ## Hướng dẫn sử dụng
@@ -20,6 +20,11 @@ Repository này tổng hợp nội dung học tập của môn TTNT, tập trung
 ```
 .
 ├── Search Algorithm
+   ├── Giao_dien.py   # Chương trình chính
+   ├── BFS.py
+   ├── DFS.py
+   ├── UCS.py
+   └── ...
 ├── Project
 └── README.md
 ```
