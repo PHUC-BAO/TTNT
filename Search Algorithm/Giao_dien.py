@@ -6,7 +6,7 @@ import random
 import math
 
 # ==============================================================================
-# 1. CẤU HÌNH HƯỚNG DI CHUYỂN DÙNG CHUNG (Thứ tự ưu tiên: L -> R -> U -> D)
+# 1A. CẤU HÌNH HƯỚNG DI CHUYỂN DÙNG CHUNG (8-PUZZLE)
 # ==============================================================================
 ACTIONS = [
     ('L', (0, -1), "SANG TRÁI"),
@@ -41,7 +41,6 @@ def manhattan_distance(current, goal):
                 distance += abs(r - target_r) + abs(c - target_c)
     return distance
 
-# Hàm kiểm tra tính khả giải của ma trận 8-puzzle
 def is_solvable(start, goal):
     def count_inversions(state):
         flat = [num for row in state for num in row if num != 0]
@@ -53,8 +52,35 @@ def is_solvable(start, goal):
         return inversions
     return (count_inversions(start) % 2) == (count_inversions(goal) % 2)
 
+
 # ==============================================================================
-# 2. KHU VỰC THUẬT TOÁN
+# 1B. CẤU HÌNH BÀI TOÁN TÔ MÀU BẢN ĐỒ ÚC (CSP)
+# ==============================================================================
+CSP_VARIABLES = ["WA", "NT", "Q", "NSW", "V", "SA", "T"]
+CSP_COLORS = ["Red", "Green", "Blue"]
+CSP_CONSTRAINTS = {
+    "WA": ["NT", "SA"],
+    "NT": ["WA", "SA", "Q"],
+    "SA": ["WA", "NT", "Q", "NSW", "V"],
+    "Q":  ["NT", "SA", "NSW"],
+    "NSW": ["Q", "SA", "V"],
+    "V":  ["SA", "NSW"],
+    "T":  []
+}
+# Toạ độ phân bổ các nút đồ thị các bang trên vùng hiển thị Canvas
+CSP_NODE_POSITIONS = {
+    "WA": (100, 240),
+    "NT": (260, 140),
+    "SA": (270, 330),
+    "Q":  (430, 170),
+    "NSW": (460, 320),
+    "V":  (400, 440),
+    "T":  (400, 540)
+}
+
+
+# ==============================================================================
+# 2. KHU VỰC THUẬT TOÁN (8-PUZZLE)
 # ==============================================================================
 
 def run_bfs(start, goal, max_steps):
@@ -481,7 +507,6 @@ def run_bidirectional_search(start, goal, max_steps):
                     queue_b.append((next_b, new_path_b))
     return None, states_history
 
-# THUẬT TOÁN MÙ TOÀN DIỆN
 def run_blind_blind_search(max_steps):
     states_pool = list(range(9))
     while True:
@@ -489,7 +514,6 @@ def run_blind_blind_search(max_steps):
         s1 = tuple(tuple(states_pool[i:i+3]) for i in range(0, 9, 3))
         random.shuffle(states_pool)
         s2 = tuple(tuple(states_pool[i:i+3]) for i in range(0, 9, 3))
-        # Ép buộc s1 và s2 phải khác nhau VÀ phải có lời giải (Solvable)
         if s1 != s2 and is_solvable(s1, s2):
             break
 
@@ -614,6 +638,47 @@ def run_and_or_graph_search(start, goal, max_steps):
     if plan_result == "FAILED" or plan_result is None: return None, states_history
     return plan_result, states_history
 
+
+# ==============================================================================
+# 2B. KHU VỰC THUẬT TOÁN CSP (TÔ MÀU BẢN ĐỒ)
+# ==============================================================================
+def run_csp_backtracking():
+    history = []
+    assignment = {v: "" for v in CSP_VARIABLES}
+    history.append((assignment.copy(), "Khởi tạo bài toán CSP: Tất cả các bang chưa được tô màu."))
+
+    def is_consistent(var, color, assign):
+        for neighbor in CSP_CONSTRAINTS[var]:
+            if assign[neighbor] == color:
+                return False
+        return True
+
+    def backtrack(assign):
+        unassigned = [v for v in CSP_VARIABLES if assign[v] == ""]
+        if not unassigned:
+            return True
+
+        var = unassigned[0] # Lấy biến tiếp theo theo thứ tự tĩnh cơ bản
+        for color in CSP_COLORS:
+            if is_consistent(var, color, assign):
+                assign[var] = color
+                history.append((assign.copy(), f"Thử gán màu {color} cho vùng bang {var}."))
+
+                if backtrack(assign):
+                    return True
+
+                assign[var] = "" # Quay lui (Backtrack)
+                history.append((assign.copy(), f"❌ Xung đột! Xóa bỏ màu gán của vùng bang {var} (Quay lui)."))
+        return False
+
+    success = backtrack(assignment)
+    if success:
+        history.append((assignment.copy(), "🎉 GIẢI THÀNH CÔNG! Đã tìm ra phương án gán màu hợp lệ không bị trùng lặp."))
+    else:
+        history.append((assignment.copy(), "❌ THẤT BẠI: Bản đồ không có lời giải tô màu hợp lệ thỏa mãn."))
+    return history
+
+
 # ==============================================================================
 # 3. GIAO DIỆN ỨNG DỤNG
 # ==============================================================================
@@ -636,6 +701,10 @@ class PuzzleApp:
         self.final_path = []
         self.is_playing = False
         self.play_job = None
+
+        # Thuộc tính lưu trữ trạng thái mô phỏng cho giao diện CSP
+        self.csp_history = []
+        self.csp_index = 0
 
         self.main_menu()
 
@@ -726,6 +795,9 @@ class PuzzleApp:
         ttk.Button(btn_frame, text="🔍 2. Nhìn Một Phần (Partial)", command=lambda: self.validate_and_start("PartialState")).grid(row=4, column=2, columnspan=2, padx=5, pady=5, sticky="we")
 
         ttk.Button(btn_frame, text="🌿 3. Đồ thị AND-OR Search", command=lambda: self.validate_and_start("AndOrGraph")).grid(row=5, column=0, columnspan=4, padx=5, pady=5, sticky="we")
+
+        # Bổ sung nút bấm hàng lớn để chuyển sang module CSP màu xanh lá cây đồng bộ
+        ttk.Button(btn_frame, text="🌍 MÔ PHỎNG BÀI TOÁN TÔ MÀU BẢN ĐỒ ÚC (CSP)", command=self.open_csp_screen).grid(row=6, column=0, columnspan=4, padx=5, pady=10, sticky="we")
 
     def validate_and_start(self, algo_type):
         try:
@@ -834,11 +906,10 @@ class PuzzleApp:
         back_btn = ttk.Button(top_bar, text="◀ Quay lại thiết lập", command=self.main_menu)
         back_btn.pack(side="right", padx=20, pady=5)
 
-        # Container chính chia tỷ lệ phần trăm hiển thị bằng grid để cân bằng 2 bên
         main_container = tk.Frame(self.root, bg="#f0f2f5")
         main_container.pack(fill="both", expand=True, padx=20, pady=15)
-        main_container.columnconfigure(0, weight=4) # Left side
-        main_container.columnconfigure(1, weight=5) # Right side
+        main_container.columnconfigure(0, weight=4)
+        main_container.columnconfigure(1, weight=5)
         main_container.rowconfigure(0, weight=1)
 
         # --- KHU VỰC BÊN TRÁI ---
@@ -880,13 +951,12 @@ class PuzzleApp:
 
         self.path_text.config(state="disabled")
 
-        # --- KHU VỰC BÊN PHẢI (Tối ưu hóa bố cục cố định) ---
+        # --- KHU VỰC BÊN PHẢI ---
         right_frame = tk.Frame(main_container, bg="white", relief="solid", bd=1)
         right_frame.grid(row=0, column=1, sticky="nsew", padx=10)
 
-        # Sử dụng grid nội bộ cho right_frame để kiểm soát không gian chặt chẽ
         right_frame.columnconfigure(0, weight=1)
-        right_frame.rowconfigure(3, weight=1) # Cho phép khu vực văn bản giải thích tự co giãn trong vùng an toàn
+        right_frame.rowconfigure(3, weight=1)
 
         tk.Label(right_frame, text="Mô phỏng tiến trình duyệt cây trạng thái", font=("Helvetica", 11, "bold"), bg="#1a73e8", fg="white", pady=6).grid(row=0, column=0, sticky="ew")
 
@@ -898,11 +968,9 @@ class PuzzleApp:
 
         tk.Label(right_frame, text="Chi tiết hành động tại Node này:", font=("Helvetica", 10, "bold"), bg="white", fg="#e65100").grid(row=3, column=0, sticky="w", padx=20, pady=(10, 2))
 
-        # Cải tiến: Đưa nhãn giải thích vào một Message widget hoặc tăng wraplength để tự động xuống hàng, tránh đẩy các nút điều khiển xuống dưới
         self.explain_text_lbl = tk.Label(right_frame, text="", font=("Helvetica", 11), bg="#fff3e0", fg="#e65100", relief="solid", bd=1, wraplength=500, justify="center", pady=6)
         self.explain_text_lbl.grid(row=4, column=0, sticky="ew", padx=20, pady=(0, 15))
 
-        # Khung điều khiển cố định hoàn toàn ở đáy của bảng mô phỏng
         control_frame = tk.Frame(right_frame, bg="white")
         control_frame.grid(row=5, column=0, pady=(10, 15))
 
@@ -993,6 +1061,119 @@ class PuzzleApp:
         if self.play_job:
             self.root.after_cancel(self.play_job)
             self.play_job = None
+
+
+    # ==============================================================================
+    # 3B. CÁC HÀM XỬ LÝ GIAO DIỆN CHO BÀI TOÁN TÔ MÀU BẢN ĐỒ ÚC (CSP)
+    # ==============================================================================
+    def open_csp_screen(self):
+        self.stop_auto_play()
+        # Dọn sạch màn hình cũ
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        # Tạo lịch sử và khởi tạo chỉ số bước duyệt của CSP
+        self.csp_history = run_csp_backtracking()
+        self.csp_index = 0
+
+        # Thanh tiêu đề phía trên (Giống như thanh màu xanh lá trong tấm ảnh lỗi của bạn)
+        top_bar = tk.Frame(self.root, bg="#2ecc71", height=50)
+        top_bar.pack(fill="x")
+        top_bar.pack_propagate(False)
+
+        title_lbl = tk.Label(
+            top_bar, text="MÔ PHỎNG BÀI TOÁN TÔ MÀU BẢN ĐỒ ÚC (CSP)",
+            font=("Helvetica", 13, "bold"), fg="white", bg="#2ecc71"
+        )
+        title_lbl.pack(side="left", padx=20)
+
+        back_btn = ttk.Button(top_bar, text="◀ Quay lại Trang chủ", command=self.main_menu)
+        back_btn.pack(side="right", padx=20, pady=5)
+
+        # Khung bố cục chính chia 2 bên
+        main_container = tk.Frame(self.root, bg="#f0f2f5")
+        main_container.pack(fill="both", expand=True, padx=20, pady=15)
+
+        # --- BÊN TRÁI: KHU VỰC VẼ ĐỒ THỊ BẢN ĐỒ ---
+        left_frame = tk.Frame(main_container, bg="white", relief="solid", bd=1)
+        left_frame.pack(side="left", fill="both", expand=True, padx=10)
+
+        tk.Label(left_frame, text="Sơ đồ mối quan hệ các Bang nước Úc", font=("Helvetica", 11, "bold"), bg="#2ecc71", fg="white", pady=6).pack(fill="x")
+
+        # Khởi tạo Canvas vẽ đồ thị mạng lưới
+        self.csp_canvas = tk.Canvas(left_frame, bg="#f8f9fa", highlightthickness=0)
+        self.csp_canvas.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Vẽ đường kết nối ràng buộc kề nhau (Constraints Lines) trước để vòng tròn đè lên trên
+        for node, neighbors in CSP_CONSTRAINTS.items():
+            x1, y1 = CSP_NODE_POSITIONS[node]
+            for neighbor in neighbors:
+                x2, y2 = CSP_NODE_POSITIONS[neighbor]
+                self.csp_canvas.create_line(x1, y1, x2, y2, fill="#bdc3c7", width=3)
+
+        # Vẽ các khối tròn hình Oval biểu thị các Bang (Variables Node)
+        self.csp_node_widgets = {}
+        for node, (x, y) in CSP_NODE_POSITIONS.items():
+            r = 28
+            oval = self.csp_canvas.create_oval(x-r, y-r, x+r, y+r, fill="white", outline="#34495e", width=2)
+            self.csp_canvas.create_text(x, y, text=node, font=("Helvetica", 10, "bold"), fill="#2c3e50")
+            self.csp_node_widgets[node] = oval
+
+        # --- BÊN PHẢI: KHU VỰC ĐIỀU KHIỂN & BẢNG ĐIỀU TRA ---
+        right_frame = tk.Frame(main_container, bg="#f0f2f5", width=350)
+        right_frame.pack(side="right", fill="y", padx=10)
+
+        self.csp_step_lbl = tk.Label(right_frame, text="", font=("Helvetica", 11, "bold"), bg="#f0f2f5", fg="#333")
+        self.csp_step_lbl.pack(pady=10)
+
+        self.csp_explain_lbl = tk.Label(
+            right_frame, text="", font=("Helvetica", 11), bg="#e8f8f5", fg="#117a65",
+            relief="solid", bd=1, wraplength=300, justify="center", pady=12
+        )
+        self.csp_explain_lbl.pack(fill="x", padx=10, pady=10)
+
+        ctrl_frame = tk.Frame(right_frame, bg="#f0f2f5")
+        ctrl_frame.pack(pady=20)
+
+        ttk.Button(ctrl_frame, text="◀ Bước trước", command=self.csp_prev_step).grid(row=0, column=0, padx=8, pady=5)
+        ttk.Button(ctrl_frame, text="Bước sau ▶", command=self.csp_next_step).grid(row=0, column=1, padx=8, pady=5)
+
+        # Đồng bộ hiển thị phần tử đầu tiên
+        self.update_csp_ui()
+
+    def update_csp_ui(self):
+        if not self.csp_history: return
+        current_assign, explanation = self.csp_history[self.csp_index]
+
+        # Cập nhật thông tin text hiển thị
+        self.csp_step_lbl.config(text=f"Tiến trình Backtracking: {self.csp_index + 1} / {len(self.csp_history)}")
+        self.csp_explain_lbl.config(text=explanation)
+
+        # Thay đổi linh hoạt màu hộp hội thoại mô tả trạng thái
+        if "🎉" in explanation:
+            self.csp_explain_lbl.config(bg="#d4edda", fg="#155724")
+        elif "❌" in explanation:
+            self.csp_explain_lbl.config(bg="#f8d7da", fg="#721c24")
+        else:
+            self.csp_explain_lbl.config(bg="#e8f8f5", fg="#117a65")
+
+        # Cập nhật màu động trên Canvas đồ thị
+        for node, color in current_assign.items():
+            ui_color = color.lower() if color != "" else "white"
+            self.csp_canvas.itemconfig(self.csp_node_widgets[node], fill=ui_color)
+
+    def csp_next_step(self):
+        if self.csp_index < len(self.csp_history) - 1:
+            self.csp_index += 1
+            self.update_csp_ui()
+        else:
+            messagebox.showinfo("Thông báo", "Đã mô phỏng xong thuật toán tô màu bản đồ CSP!")
+
+    def csp_prev_step(self):
+        if self.csp_index > 0:
+            self.csp_index -= 1
+            self.update_csp_ui()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
